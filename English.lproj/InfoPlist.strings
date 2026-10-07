@@ -1,0 +1,3 @@
+/* Front Row reads the main menu name from here. */
+
+CFBundleName = "Live TV";

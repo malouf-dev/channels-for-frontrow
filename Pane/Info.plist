@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>ChannelsForFrontRow</string>
+	<key>CFBundleIdentifier</key>
+	<string>channels-for-frontrow.pane</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Channels for Front Row</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>NSPrincipalClass</key>
+	<string>LTVPreferencePane</string>
+	<key>NSPrefPaneIconFile</key>
+	<string>ChannelsForFrontRow.png</string>
+	<key>NSPrefPaneIconLabel</key>
+	<string>Channels for&#10;Front Row</string>
+</dict>
+</plist>

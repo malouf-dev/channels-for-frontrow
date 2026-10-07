@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>ChannelsForFrontRow</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.apple.frontrow.appliance.channels-for-frontrow</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Live TV</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>NSPrincipalClass</key>
+	<string>RUIYTAppliance</string>
+	<key>FRApplianceDataSourceType</key>
+	<string>All</string>
+	<key>FRAppliancePreferedOrderValue</key>
+	<real>1.5</real>
+	<key>FRApplianceIconHorizontalOffset</key>
+	<real>0.0566</real>
+	<key>FRApplianceIconKerningFactor</key>
+	<real>0.0</real>
+	<key>FRApplianceIconReflectionOffset</key>
+	<real>-0.12</real>
+	<key>FRApplianceIconReflectionPath</key>
+	<string>ApplianceIconReflection.png</string>
+	<key>BRApplianceBlurredIconPath</key>
+	<string>BlurredApplianceIcon.png</string>
+	<key>BRApplianceBlurredIconReflectionPath</key>
+	<string>BlurredApplianceIconReflection.png</string>
+</dict>
+</plist>
