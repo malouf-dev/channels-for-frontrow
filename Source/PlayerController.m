@@ -18,8 +18,13 @@ static const char *LTVDeinterlaceMode = "yadif2x";
 // Steps in the sound's fade-in, which runs alongside the picture's.
 static const int LTVSoundFadeSteps = 10;
 
+// How often the player tells Front Row the user is still there. The shortest
+// screen saver delay in System Preferences is a minute.
+static const NSTimeInterval LTVActivityInterval = 30.0;
+
 @interface LTVPlayerController ()
 - (void)playerReportedEvent:(int)type;
+- (void)reportActivity;
 @end
 
 // VLC calls this on one of its own threads.
@@ -195,11 +200,46 @@ static void LTVPlayerEvent(const libvlc_event_t *event, void *userData)
     }
 }
 
+#pragma mark Keeping awake
+
+// The assertion stops the display, and with it the Mac, sleeping while the
+// screen is up. Front Row runs its own screen saver timer, which only user
+// actions restart, so this also posts the same notification as Front Row's
+// player does. Both stop when the screen is popped.
+- (void)keepAwake
+{
+    if (!_holdingDisplayAssertion) {
+        IOReturn result = IOPMAssertionCreateWithName(kIOPMAssertionTypeNoDisplaySleep, kIOPMAssertionLevelOn,
+                                                      CFSTR("Live TV is playing a channel"), &_displayAssertion);
+        _holdingDisplayAssertion = (result == kIOReturnSuccess);
+        if (!_holdingDisplayAssertion)
+            NSLog(@"Live TV: couldn't keep the display awake (0x%x)", result);
+    }
+    [self reportActivity];
+}
+
+- (void)reportActivity
+{
+    if ([self firstResponder])
+        [[NSNotificationCenter defaultCenter] postNotificationName:kBRUserActionNotification object:nil];
+    [self performSelector:@selector(reportActivity) withObject:nil afterDelay:LTVActivityInterval];
+}
+
+- (void)allowSleep
+{
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(reportActivity) object:nil];
+    if (_holdingDisplayAssertion) {
+        IOPMAssertionRelease(_displayAssertion);
+        _holdingDisplayAssertion = NO;
+    }
+}
+
 #pragma mark Screen
 
 - (void)wasPushed
 {
     [super wasPushed];
+    [self keepAwake];
     // The volume control retains its player, so attach only while on screen.
     [_volumeControl setPlayer:self];
 
@@ -218,6 +258,7 @@ static void LTVPlayerEvent(const libvlc_event_t *event, void *userData)
 - (void)willBePopped
 {
     _closing = YES;
+    [self allowSleep];
     [NSObject cancelPreviousPerformRequestsWithTarget:self];
     [_volumeControl setPlayer:nil];
     [_renderer setTarget:nil firstPictureAction:NULL];

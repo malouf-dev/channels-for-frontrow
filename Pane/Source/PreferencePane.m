@@ -1,9 +1,10 @@
 // PreferencePane.m
 //
-// Layout follows the approved mockup (scratch/mockups/live-tv-pane.html):
-// right-aligned labels in a 160-point column, controls from x = 180, and a
-// status line under whichever server choice is on. Status lines that are
-// empty take no space.
+// Layout follows the approved mockups (scratch/mockups/live-tv-pane.html and
+// channels-pane-toggle-uninstall.html): right-aligned labels in a 160-point
+// column, controls from x = 180, and a status line under whichever server
+// choice is on. Status lines that are empty take no space. Uninstall sits at
+// the bottom right, beside the footer.
 
 #import "PreferencePane.h"
 #import "ChannelsDVR.h"
@@ -11,11 +12,20 @@
 #import "Settings.h"
 
 static const CGFloat LTVPaneWidth = 668.0;
-static const CGFloat LTVPaneHeight = 330.0;
+static const CGFloat LTVPaneHeight = 390.0;
 static const CGFloat LTVLabelWidth = 170.0;
 static const CGFloat LTVControlsX = 180.0;
 static const CGFloat LTVIndent = 20.0;
 static const CGFloat LTVPopUpWidth = 264.0;
+static const CGFloat LTVPluginPopUpWidth = 130.0;
+
+// Where Front Row loads the plugin from. The manage script moves it out to
+// /Library/Application Support/channels-for-frontrow while it's disabled.
+static NSString *const LTVPluginPath =
+    @"/System/Library/CoreServices/Front Row.app/Contents/PlugIns/ChannelsForFrontRow.frappliance";
+
+static NSString *const LTVFooterEnabled = @"Changes apply the next time you open Live TV in Front Row.";
+static NSString *const LTVFooterDisabled = @"Front Row doesn't load Live TV while it's disabled.";
 
 typedef enum {
     LTVStatusNone,
@@ -66,6 +76,21 @@ static NSPopUpButton *LTVPopUp(id target, SEL action)
     return popUp;
 }
 
+static NSBox *LTVSeparator(void)
+{
+    NSBox *separator = [[[NSBox alloc] initWithFrame:NSMakeRect(0, 0, 100, 1)] autorelease];
+    [separator setBoxType:NSBoxSeparator];
+    return separator;
+}
+
+// A string literal for AppleScript source.
+static NSString *LTVAppleScriptString(NSString *text)
+{
+    text = [text stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
+    text = [text stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
+    return [NSString stringWithFormat:@"\"%@\"", text];
+}
+
 static NSImageView *LTVBead(void)
 {
     NSImageView *bead = [[[NSImageView alloc] initWithFrame:NSMakeRect(0, 0, 12, 12)] autorelease];
@@ -93,6 +118,7 @@ static NSProgressIndicator *LTVSpinner(void)
 
 - (void)dealloc
 {
+    [_alert release];
     [_servers release];
     [super dealloc];
 }
@@ -102,6 +128,12 @@ static NSProgressIndicator *LTVSpinner(void)
 - (NSView *)loadMainView
 {
     NSView *view = [[[LTVFlippedView alloc] initWithFrame:NSMakeRect(0, 0, LTVPaneWidth, LTVPaneHeight)] autorelease];
+
+    _pluginLabel = LTVText(@"Plugin:", NO, NSRightTextAlignment);
+    _pluginPopUp = LTVPopUp(self, @selector(pluginChosen:));
+    [_pluginPopUp addItemWithTitle:@"Enabled"];
+    [_pluginPopUp addItemWithTitle:@"Disabled"];
+    _pluginSeparator = LTVSeparator();
 
     _serverLabel = LTVText(@"Channels DVR server:", NO, NSRightTextAlignment);
     _automaticRadio = LTVRadio(@"Find automatically", self, @selector(radioChanged:));
@@ -128,20 +160,25 @@ static NSProgressIndicator *LTVSpinner(void)
     _addressSpinner = LTVSpinner();
     _addressStatus = LTVText(@"", YES, NSLeftTextAlignment);
 
-    _separator = [[[NSBox alloc] initWithFrame:NSMakeRect(0, 0, 100, 1)] autorelease];
-    [_separator setBoxType:NSBoxSeparator];
+    _separator = LTVSeparator();
 
     _channelsLabel = LTVText(@"Channels:", NO, NSRightTextAlignment);
     _collectionPopUp = LTVPopUp(self, @selector(collectionChosen:));
     _note = LTVText(@"Live TV shows the channels in this collection, in the order set in Channels DVR. "
                     @"Choose All Channels to show every channel.", YES, NSLeftTextAlignment);
     [[_note cell] setWraps:YES];
-    _footer = LTVText(@"Changes apply the next time you open Live TV in Front Row.", YES, NSCenterTextAlignment);
+    _footer = LTVText(LTVFooterEnabled, YES, NSLeftTextAlignment);
+    _uninstallButton = [[[NSButton alloc] initWithFrame:NSMakeRect(0, 0, 100, 32)] autorelease];
+    [_uninstallButton setBezelStyle:NSRoundedBezelStyle];
+    [_uninstallButton setTitle:@"Uninstall…"];
+    [_uninstallButton setTarget:self];
+    [_uninstallButton setAction:@selector(uninstall:)];
+    [_uninstallButton sizeToFit];
 
     NSView *views[] = {
-        _serverLabel, _automaticRadio, _serverPopUp, _automaticBead, _automaticSpinner, _automaticStatus,
+        _pluginLabel, _pluginPopUp, _pluginSeparator, _serverLabel, _automaticRadio, _serverPopUp, _automaticBead, _automaticSpinner, _automaticStatus,
         _lookAgainButton, _addressRadio, _addressField, _addressBead, _addressSpinner, _addressStatus,
-        _separator, _channelsLabel, _collectionPopUp, _note, _footer,
+        _separator, _channelsLabel, _collectionPopUp, _note, _footer, _uninstallButton,
     };
     for (size_t i = 0; i < sizeof views / sizeof views[0]; i++)
         [view addSubview:views[i]];
@@ -177,6 +214,11 @@ static NSProgressIndicator *LTVSpinner(void)
 - (void)layoutView
 {
     CGFloat y = 26;
+    [_pluginLabel setFrame:NSMakeRect(0, y + 4, LTVLabelWidth, 17)];
+    [_pluginPopUp setFrame:NSMakeRect(LTVControlsX - 3, y, LTVPluginPopUpWidth, 26)];
+    y += 38;
+    [_pluginSeparator setFrame:NSMakeRect(40, y, LTVPaneWidth - 80, 1)];
+    y += 22;
     [_serverLabel setFrame:NSMakeRect(0, y + 1, LTVLabelWidth, 17)];
     [_automaticRadio setFrameOrigin:NSMakePoint(LTVControlsX, y)];
     y += 26;
@@ -196,7 +238,11 @@ static NSProgressIndicator *LTVSpinner(void)
     [_collectionPopUp setFrame:NSMakeRect(LTVControlsX - 3, y, LTVPopUpWidth, 26)];
     y += 32;
     [_note setFrame:NSMakeRect(LTVControlsX, y, 380, 30)];
-    [_footer setFrame:NSMakeRect(0, LTVPaneHeight - 34, LTVPaneWidth, 14)];
+
+    // A rounded button's frame is 6 points wider than its bezel on each side.
+    NSRect button = [_uninstallButton frame];
+    [_uninstallButton setFrameOrigin:NSMakePoint(LTVPaneWidth - 40 + 6 - button.size.width, LTVPaneHeight - 43)];
+    [_footer setFrame:NSMakeRect(40, LTVPaneHeight - 34, LTVPaneWidth - 80 - button.size.width, 14)];
 }
 
 #pragma mark Status lines
@@ -394,12 +440,48 @@ static NSProgressIndicator *LTVSpinner(void)
     }
 }
 
-// Each time the pane is shown, start from the saved settings.
+// While the plugin is disabled: the saved choices, greyed out, without
+// contacting the server.
+- (void)showSettingsDisabled
+{
+    ++_generation;      // a search or check still running is ignored
+    NSString *address = LTVReadSetting(LTVSettingChannelsServer);
+    NSString *name = LTVReadSetting(LTVSettingChannelsServerName);
+    [_automaticRadio setState:address ? NSOffState : NSOnState];
+    [_addressRadio setState:address ? NSOnState : NSOffState];
+    [_serverPopUp removeAllItems];
+    if (name)
+        [_serverPopUp addItemWithTitle:name];
+    [_serverPopUp setEnabled:NO];
+    [_addressField setEnabled:NO];
+    [_automaticSpinner stopAnimation:nil];
+    [_addressSpinner stopAnimation:nil];
+    [_automaticStatus setStringValue:@""];
+    [_addressStatus setStringValue:@""];
+    [self disableCollections];
+    [self layoutView];
+}
+
+// Each time the pane is shown, and after the plugin is enabled or disabled,
+// start from what's on disk and the saved settings.
 - (void)didSelect
 {
+    _pluginEnabled = [[NSFileManager defaultManager] fileExistsAtPath:LTVPluginPath];
+    [_pluginPopUp selectItemAtIndex:_pluginEnabled ? 0 : 1];
+    [_automaticRadio setEnabled:_pluginEnabled];
+    [_addressRadio setEnabled:_pluginEnabled];
+    NSColor *label = _pluginEnabled ? [NSColor controlTextColor] : [NSColor disabledControlTextColor];
+    [_serverLabel setTextColor:label];
+    [_channelsLabel setTextColor:label];
+    [_note setTextColor:_pluginEnabled ? [NSColor colorWithCalibratedWhite:0.3 alpha:1.0] : label];
+    [_footer setStringValue:_pluginEnabled ? LTVFooterEnabled : LTVFooterDisabled];
+
     NSString *address = LTVReadSetting(LTVSettingChannelsServer);
     [_addressField setStringValue:address ? address : @""];
-    [self useAutomatic:address == nil];
+    if (_pluginEnabled)
+        [self useAutomatic:address == nil];
+    else
+        [self showSettingsDisabled];
 }
 
 - (void)radioChanged:(id)sender
@@ -438,6 +520,111 @@ static NSProgressIndicator *LTVSpinner(void)
 - (void)lookAgain:(id)sender
 {
     [self findServers];
+}
+
+#pragma mark Enabling, disabling and uninstalling
+
+// Runs Resources/manage as root. AppleScript asks for an administrator's
+// password, in a window that Mac OS X draws. Returns nil when it worked, an
+// empty string when the password was cancelled, or what went wrong.
+- (NSString *)runManage:(NSString *)action pane:(NSString *)pane
+{
+    NSString *script = [[self bundle] pathForResource:@"manage" ofType:nil];
+    if (script == nil)
+        return @"The pane is missing its manage script.";
+    NSMutableString *source = [NSMutableString stringWithFormat:@"do shell script \"/bin/sh \" & quoted form of %@ & \" %@\"",
+                               LTVAppleScriptString(script), action];
+    if (pane)
+        [source appendFormat:@" & \" \" & quoted form of %@", LTVAppleScriptString(pane)];
+    [source appendString:@" with administrator privileges"];
+
+    NSDictionary *error = nil;
+    NSAppleScript *appleScript = [[[NSAppleScript alloc] initWithSource:source] autorelease];
+    if ([appleScript executeAndReturnError:&error])
+        return nil;
+    if ([[error objectForKey:NSAppleScriptErrorNumber] intValue] == userCanceledErr)
+        return @"";
+    NSString *message = [error objectForKey:NSAppleScriptErrorMessage];
+    return [message length] ? message : @"No reason was given.";
+}
+
+// One sheet at a time. didEnd, if any, is sent as
+// -sheetDidEnd:returnCode:contextInfo: is, after the sheet has gone.
+- (void)showSheet:(NSString *)title text:(NSString *)text buttons:(NSArray *)buttons didEnd:(SEL)didEnd
+{
+    [_alert release];
+    _alert = [[NSAlert alloc] init];
+    [_alert setMessageText:title];
+    [_alert setInformativeText:text];
+    for (NSString *button in buttons)
+        [_alert addButtonWithTitle:button];
+    NSString *icon = [[self bundle] pathForImageResource:@"ChannelsForFrontRow"];
+    if (icon)
+        [_alert setIcon:[[[NSImage alloc] initWithContentsOfFile:icon] autorelease]];
+    [_alert beginSheetModalForWindow:[[self mainView] window] modalDelegate:self didEndSelector:didEnd contextInfo:NULL];
+}
+
+- (void)pluginChosen:(id)sender
+{
+    BOOL enable = ([_pluginPopUp indexOfSelectedItem] == 0);
+    if (enable == _pluginEnabled)
+        return;
+    NSString *failure = [self runManage:enable ? @"enable" : @"disable" pane:nil];
+    if ([failure length])
+        [self showSheet:enable ? @"Live TV couldn't be enabled." : @"Live TV couldn't be disabled."
+                   text:failure buttons:[NSArray arrayWithObject:@"OK"] didEnd:NULL];
+    [self didSelect];
+}
+
+// Cancel is the first button, so Return and Escape both cancel.
+- (void)uninstall:(id)sender
+{
+    [self showSheet:@"Uninstall Channels for Front Row?"
+               text:@"This removes Live TV from Front Row, this preference pane and the copy of VLC that "
+                    @"Live TV uses. Your settings are removed too.\n\nYou'll be asked for an administrator's password."
+            buttons:[NSArray arrayWithObjects:@"Cancel", @"Uninstall", nil]
+             didEnd:@selector(uninstallSheetDidEnd:returnCode:contextInfo:)];
+}
+
+// A sheet is still attached while its didEnd runs, and System Preferences
+// ignores -terminate: while a sheet is up. So each didEnd orders its sheet
+// out and does the rest on the next turn of the run loop.
+- (void)uninstallSheetDidEnd:(NSAlert *)alert returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo
+{
+    [[alert window] orderOut:nil];
+    if (returnCode == NSAlertSecondButtonReturn)
+        [self performSelector:@selector(finishUninstall) withObject:nil afterDelay:0.0];
+}
+
+- (void)finishUninstall
+{
+    ++_generation;
+    NSString *failure = [self runManage:@"uninstall" pane:[[self bundle] bundlePath]];
+    if (failure && [failure length] == 0)
+        return;
+    if (failure) {
+        [self showSheet:@"Channels for Front Row couldn't be uninstalled." text:failure
+                buttons:[NSArray arrayWithObject:@"OK"] didEnd:NULL];
+        return;
+    }
+
+    // The settings are this user's own, so they need no password.
+    LTVWriteSetting(LTVSettingChannelsServer, nil);
+    LTVWriteSetting(LTVSettingChannelsServerName, nil);
+    LTVWriteSetting(LTVSettingChannelCollection, nil);
+    [[NSFileManager defaultManager] removeItemAtPath:[NSHomeDirectory() stringByAppendingPathComponent:
+                                                      @"Library/Preferences/channels-for-frontrow.plist"] error:NULL];
+
+    [self showSheet:@"Channels for Front Row is uninstalled."
+               text:@"System Preferences will quit, so the pane disappears from it."
+            buttons:[NSArray arrayWithObject:@"Quit"]
+             didEnd:@selector(uninstalledSheetDidEnd:returnCode:contextInfo:)];
+}
+
+- (void)uninstalledSheetDidEnd:(NSAlert *)alert returnCode:(NSInteger)returnCode contextInfo:(void *)contextInfo
+{
+    [[alert window] orderOut:nil];
+    [NSApp performSelector:@selector(terminate:) withObject:nil afterDelay:0.0];
 }
 
 @end

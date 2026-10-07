@@ -108,6 +108,12 @@ enum {
 // BRVolumeControl attached to that player then shows its bar.
 extern NSString *const kBRMediaPlayerVolumeChanged;
 
+// Posted when the user does something. Front Row's idle timer starts again,
+// so its screen saver doesn't appear. -[BRVideoPlayerController
+// _suppressScreenSaver] posts it, object nil, while the player is the first
+// responder, each time playback progresses.
+extern NSString *const kBRUserActionNotification;
+
 // Front Row's renderer. Each frame it asks the playback delegate
 // -newFrameForTime:, calls its -drawFrameInBounds: in the renderer's OpenGL
 // context, then draws the interface layers on top. Video screens also remove
@@ -156,6 +162,7 @@ extern NSString *const kBRMediaPlayerVolumeChanged;
 - (void)addControl:(id)control;
 - (void)setLayoutManager:(id)layoutManager;
 - (BOOL)brEventAction:(BREvent *)event;
+- (BOOL)firstResponder;             // whether this screen gets the remote's events
 - (void)wasPushed;
 - (void)willBePopped;
 - (void)wasPopped;

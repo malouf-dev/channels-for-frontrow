@@ -11,7 +11,11 @@
 // + and - change the Mac's volume and show Front Row's volume bar, as in
 // Front Row's own player. For the bar, this controller stands in for the
 // player: it posts kBRMediaPlayerVolumeChanged and answers -volume.
+//
+// While the screen is up, the display stays awake and Front Row's screen
+// saver stays away (see -keepAwake).
 
+#import <IOKit/pwr_mgt/IOPMLib.h>
 #import "BackRow.h"
 #import "VideoRenderer.h"
 #import "VLC.h"
@@ -29,6 +33,8 @@
     BOOL _closing;
     BOOL _showingVideo;
     NSTimeInterval _requestedAt;
+    IOPMAssertionID _displayAssertion;
+    BOOL _holdingDisplayAssertion;
 }
 - (id)initWithTitle:(NSString *)title streamURL:(NSURL *)url;
 @end

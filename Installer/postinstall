@@ -1,0 +1,21 @@
+#!/bin/sh
+# Runs as root after the installer has copied the plugin, the pane and VLC.
+# $3 is the volume being installed on, "/" for the startup disk. Each step
+# reports a problem and carries on, because none of them stops Live TV
+# working.
+
+VLC="$3/Library/Application Support/channels-for-frontrow/VLC.app"
+
+# A copy that the pane moved out of Front Row to disable it. Installing
+# always leaves the new plugin in Front Row, enabled.
+rm -rf "$3/Library/Application Support/channels-for-frontrow/ChannelsForFrontRow.frappliance"
+
+# VLC saves a list of its plugins so it doesn't open them all at every start.
+# Front Row can't write inside this copy, so the list is made here.
+"$(dirname "$0")/vlc-cache" "$VLC"
+
+# Front Row keeps running in the background after you leave it. Quitting it
+# makes it load the new plugin next time.
+killall "Front Row" 2>/dev/null
+
+exit 0

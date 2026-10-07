@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The installer's title, checks and contents. productbuild combines this
+     with the component package that pkgbuild makes (see the Makefile). -->
+<installer-gui-script minSpecVersion="1">
+    <title>Channels for Front Row</title>
+    <options customize="never" rootVolumeOnly="true"/>
+    <installation-check script="checkThisMac()"/>
+    <script><![CDATA[
+function checkThisMac() {
+    var version = system.version.ProductVersion;
+    if (system.compareVersions(version, '10.6') < 0 || system.compareVersions(version, '10.7') >= 0) {
+        my.result.type = 'Fatal';
+        my.result.title = 'Channels for Front Row needs Mac OS X 10.6.';
+        my.result.message = 'It adds a menu to the Front Row in Mac OS X 10.6. This Mac has ' + version + '.';
+        return false;
+    }
+    if (!system.files.fileExistsAtPath('/System/Library/CoreServices/Front Row.app')) {
+        my.result.type = 'Fatal';
+        my.result.title = 'Front Row isn\'t on this Mac.';
+        my.result.message = 'Channels for Front Row adds a menu to Front Row, which should be in /System/Library/CoreServices.';
+        return false;
+    }
+    return true;
+}
+    ]]></script>
+    <choices-outline>
+        <line choice="channels-for-frontrow"/>
+    </choices-outline>
+    <choice id="channels-for-frontrow" title="Channels for Front Row">
+        <pkg-ref id="channels-for-frontrow.pkg"/>
+    </choice>
+    <pkg-ref id="channels-for-frontrow.pkg" onConclusion="none">#ChannelsForFrontRow.pkg</pkg-ref>
+</installer-gui-script>

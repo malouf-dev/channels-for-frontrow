@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1</string>
+	<string>1.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>1.0</string>
 	<key>NSPrincipalClass</key>
 	<string>RUIYTAppliance</string>
 	<key>FRApplianceDataSourceType</key>
@@ -25,16 +25,12 @@
 	<key>FRAppliancePreferedOrderValue</key>
 	<real>1.5</real>
 	<key>FRApplianceIconHorizontalOffset</key>
-	<real>0.0566</real>
+	<real>0.0664</real>
 	<key>FRApplianceIconKerningFactor</key>
 	<real>0.0</real>
 	<key>FRApplianceIconReflectionOffset</key>
-	<real>-0.12</real>
-	<key>FRApplianceIconReflectionPath</key>
-	<string>ApplianceIconReflection.png</string>
+	<real>-0.22</real>
 	<key>BRApplianceBlurredIconPath</key>
 	<string>BlurredApplianceIcon.png</string>
-	<key>BRApplianceBlurredIconReflectionPath</key>
-	<string>BlurredApplianceIconReflection.png</string>
 </dict>
 </plist>

@@ -13,7 +13,8 @@ If `CLAUDE.local.md` exists, read it too. It holds the developer's own machines,
 ## Build and check
 
 - Build, install and quit Front Row: `make imac` from the repository folder. It builds on the old Mac whose SSH alias is set in `local.mk` (not in the repository). Then the developer opens Front Row on the old Mac with Command-Escape or the remote. Never open Front Row over SSH. It starts hidden and takes the remote's service away from the real session.
-- The old Mac runs Mac OS X 10.6.8 with Xcode 3.2.6. Its copy of VLC 2.0.10 is at `~/Library/Application Support/channels-for-frontrow/VLC.app`.
+- The old Mac runs Mac OS X 10.6.8 with Xcode 3.2.6. Its copy of VLC 2.0.10 is at `~/Library/Application Support/channels-for-frontrow/VLC.app`. `make vlc` puts it there.
+- `make package` builds the installer (see the Installer section).
 - SSH to a `.local` name needs Claude Code's sandbox turned off, because the sandbox blocks those lookups.
 - To see the old Mac's screen: `ssh ALIAS 'screencapture -x /tmp/live-tv.png'`, then copy it back with `scp`. This works over SSH.
 - To read Live TV's log: `ssh ALIAS 'syslog -k Time ge -5m' | grep "Live TV:"`. Every Live TV log line starts with `Live TV:`.
@@ -46,6 +47,7 @@ If `CLAUDE.local.md` exists, read it too. It holds the developer's own machines,
 - Measured with `vlccheck`: on one channel the first 21 pictures were heavily green, and the green was gone from picture 33, about two-thirds of a second at 50 a second. Two other channels had none from the first picture. Turning off `--ffmpeg-hurry-up` didn't help.
 - `libvlc_audio_set_volume(player, 0)` before `play` does keep the start silent. Tested by capturing VLC's decoded sound with `libvlc_audio_set_callbacks`: silent from the first sound at 0.75 seconds, normal loudness once the volume went to 100.
 - The sound's fade steps run on the VLC queue with `dispatch_after`. Each start of a player gets a new generation number, so a step left over from a stream that was retried does nothing.
+- While the player screen is up, it holds an IOKit `kIOPMAssertionTypeNoDisplaySleep` assertion named "Live TV is playing a channel", and every 30 seconds posts `kBRUserActionNotification` while it's the first responder. Front Row's own `-[BRVideoPlayerController _suppressScreenSaver]` posts that notification as playback progresses. It restarts Front Row's own screen saver timer. BackRow never calls `UpdateSystemActivity` or IOKit's power calls itself. The Front Row app does call `UpdateSystemActivity`, from code with stripped names. Both stop in `-willBePopped`.
 
 ## Menu and guide
 
@@ -67,12 +69,46 @@ If `CLAUDE.local.md` exists, read it too. It holds the developer's own machines,
 ## Preference pane
 
 - `Pane/` builds `ChannelsForFrontRow.prefPane` for i386 and x86_64. The 64-bit System Preferences on 10.6 runs with garbage collection (its image flags are 0x6), and Apple's panes support it, so the pane is built with `-fobjc-gc` and its code works with or without collection. CF objects from `CFPreferencesCopyAppValue` go through `NSMakeCollectable`.
-- The view is built in code (no nib), in a flipped view, following the approved mockup at `scratch/mockups/live-tv-pane.html`. Status lines that are empty take no space. The beads are 10.6's `NSImageNameStatusAvailable` and `NSImageNameStatusUnavailable`.
+- The view is built in code (no nib), in a flipped view, following the approved mockups at `scratch/mockups/live-tv-pane.html` and `scratch/mockups/channels-pane-toggle-uninstall.html`. Status lines that are empty take no space. The beads are 10.6's `NSImageNameStatusAvailable` and `NSImageNameStatusUnavailable`.
 - It shares Settings.m, Discovery.m, ChannelsDVR.m and JSON.m with the plugin. Settings: `ChannelsServer` (typed address; a missing port becomes 8089), `ChannelsServerName` (which Bonjour server, when there are several; the plugin honours it) and `ChannelCollection`.
 - The pane's label in System Preferences is `Channels for&#10;Front Row` in `Pane/Info.plist`. Without the line break, System Preferences cuts it to "Channe…nt Row". Apple's own panes break their labels the same way, such as "Parental\nControls".
-- During development, `make install` puts the pane in `~/Library/PreferencePanes` with this Mac's TV Shows icon as `ChannelsForFrontRow.png`. The installer will use `/Library/PreferencePanes`.
+- During development, `make install` puts the pane in `~/Library/PreferencePanes`. The installer uses `/Library/PreferencePanes`.
+- **Plugin: Enabled / Disabled** moves the plugin between Front Row's `PlugIns` folder and `/Library/Application Support/channels-for-frontrow/`. Front Row creates the principal class of every plugin in `PlugIns` when it starts, so only moving the plugin out frees `RUIYTAppliance` for another plugin. Hiding it with `-[BRFeatureManager disableFeatureNamed:]` would only remove the menu item. The pane works out the state from whether the plugin is in `PlugIns`. While it's disabled, every other control is greyed out and the pane doesn't contact the server.
+- Enabling, disabling and **Uninstall…** run `Pane/manage`, copied into the pane's Resources, as root through `NSAppleScript` `do shell script … with administrator privileges`. Mac OS X draws the password window, and AppleScript remembers the password for about five minutes. Cancelling gives `userCanceledErr` (-128), which changes nothing. Each action quits Front Row.
+- `manage uninstall PANE` removes the plugin from either folder, `/Library/Application Support/channels-for-frontrow/` and the pane at PANE, which must end in `/ChannelsForFrontRow.prefPane`, then forgets the package receipt. The pane then removes the user's settings itself and shows a sheet whose Quit button quits System Preferences.
+- A sheet is still attached while its didEnd runs, and System Preferences ignores `-[NSApp terminate:]` while a sheet is up. A test pane on the old Mac confirmed it: terminate from a didEnd did nothing, while ordering the sheet out and terminating on the next turn of the run loop quit. So each didEnd orders its sheet out and defers the rest with `performSelector:afterDelay:0`.
+- The sheets are `NSAlert`s held in `_alert` while they're up. Under garbage collection, an alert held by nothing else could be collected while it's on screen. Cancel is the first button, so Return and Escape both cancel the uninstall. NSAlert puts the first button on the right, where the mockup had it on the left.
+- Checked on the old Mac: `manage` against scratch folders, then with a password in the clean test. Disabling removed Live TV from Front Row's main menu and enabling brought it back. Uninstall removed the plugin, the pane, VLC's folder, the settings and the package receipt, and Quit closed System Preferences. The first uninstall, before the deferred quit, left System Preferences open.
 - To see it from here: `osascript -e 'tell application "System Preferences" to set current pane to pane id "channels-for-frontrow.pane"'` over SSH, then `screencapture`. That works without access for assistive devices. Clicking controls from a script would need that access, which is usually off.
 - Checked: finding and connecting to a server automatically, a typed working address, a wrong address (the error shows after the 15-second timeout), and changing the collection. Not checked: no server found, and several servers.
+
+## Installer
+
+- `make package` on the current Mac runs `make pkg` on the old Mac and copies `build/ChannelsForFrontRow-VERSION.pkg` back. VERSION is `CFBundleShortVersionString` in `Info.plist`. Keep the version in `Pane/Info.plist` the same.
+- It's built with the old Mac's own `pkgbuild` and `productbuild`, so 10.6's Installer can read it. The package identifier is `channels-for-frontrow.pkg`. The payload is the plugin in Front Row's `PlugIns` folder, the pane in `/Library/PreferencePanes`, and `VLC.app` with VLC's `COPYING` in `/Library/Application Support/channels-for-frontrow/`.
+- VLC comes from `downloads/vlc-2.0.10-intel32.dmg`, downloaded on the current Mac and checked against `VLC_SHA256`. The old Mac's browser and tools can't open VideoLAN's or GitHub's secure sites. 10.6's `shasum` can't read a checksum list from a pipe, so the Makefile's `CHECK_VLC` compares the digest itself.
+- Every bundle is marked as not relocatable. pkgbuild marks VLC.app relocatable by default, and Installer would then install over any other `org.videolan.vlc` it finds, such as a newer VLC in Applications. The component's `PackageInfo` must have an empty `<relocate/>`.
+- pkgbuild writes `overwrite-permissions="true"`. The payload's parent folders are root:wheel 755, but on 10.6 `/` and `/Library` are root:admin 1775 and `/Library/Application Support` is root:admin 775. The Makefile expands the component package, sets it to false and flattens it again. 10.6's `pkgutil --expand` writes `Scripts` as a folder.
+- `Installer/postinstall` runs as root, with the target volume in `$3`. It removes a plugin that was disabled (moved to `/Library/Application Support/channels-for-frontrow/`), so a new install is always enabled. Then it runs `vlc-cache` and quits Front Row.
+- `vlc-cache` starts VLC's engine with `--reset-plugins-cache`, which writes `plugins.dat` in VLC's `plugins` folder. Front Row runs as the user and can't write there. From a cold disk (after `purge`), a read-only copy started in 0.05 to 0.07 seconds with the cache and 0.57 seconds without it.
+- `Installer/Distribution.xml` sets the title, `customize="never"` and `rootVolumeOnly="true"`, and refuses a Mac that isn't on Mac OS X 10.6 or has no Front Row.app.
+- Clean test on 8 October 2026, on the old Mac with the development install removed: the package installed in 8.4 seconds, the postinstall built `plugins.dat` (root-owned), VLC started from `/Library` in 0.04 seconds, and `/`, `/Library` and `/Library/Application Support` kept their owners and permissions through installing and uninstalling. Not checked: the installation check's messages on a Mac that isn't 10.6, and the README's Terminal steps for removing by hand.
+
+## Icon
+
+- `Artwork/Icon.png` is the original: 1254 × 1254, transparent, generated with ChatGPT from a prompt that asked for Front Row's glossy 2009 style, a straight-on view and the Channels test pattern. The other three files are made from it with ImageMagick on the current Mac and committed, because the old Mac has no blur tool. After changing `Icon.png`, run these from the repository folder:
+
+  ```bash
+  G=$(magick Artwork/Icon.png -alpha extract -threshold 10% -format '%@' info:)
+  magick Artwork/Icon.png -crop $G +repage -resize x410 -background none -gravity south -extent 512x457 -gravity north -extent 512x512 Artwork/ApplianceIcon.png
+  magick Artwork/ApplianceIcon.png -resize 100x100 -channel RGBA -blur 0x4 Artwork/BlurredApplianceIcon.png
+  magick Artwork/Icon.png -crop $G +repage -resize 244x244 -background none -gravity center -extent 256x256 Artwork/ChannelsForFrontRow.png
+  ```
+
+  The crop uses pixels at least 10% opaque, because the original has faint pixels around the TV.
+- Front Row's main-menu icons are 512 × 512 transparent PNGs (`ApplianceIcon.png`). The object is about 410 pixels high for tall shapes, with about 55 pixels below it. Each also has a 100 × 100 blurred copy at the same framing (`BRApplianceBlurredIconPath`).
+- Front Row draws the reflection itself unless `FRApplianceIconReflectionPath` names one. Only TV Shows ships its own. Movies, Music and Podcasts use `FRApplianceIconReflectionOffset` -0.22, and Movies and Podcasts `FRApplianceIconHorizontalOffset` 0.0664. The plugin uses those values.
+- The pane's icon (`ChannelsForFrontRow.png`, `NSPrefPaneIconFile`) is the TV cropped close on a 256 × 256 canvas, because System Preferences shows it at 32 × 32.
 
 ## BackRow facts confirmed so far
 
@@ -121,7 +157,7 @@ Tested with `tools/vlccheck`, outside Front Row, over SSH. VLC 2.0.10 is VideoLA
 
 - `libvlc.5.dylib` loads with `dlopen()` straight from `VLC.app/Contents/MacOS/lib`. The libraries find each other with `@loader_path`. Set `VLC_PLUGIN_PATH` to `VLC.app/Contents/MacOS/plugins` first. `VLC.app/Contents/MacOS/include` has the libvlc headers.
 - Pictures go to memory with `libvlc_video_set_callbacks` and `libvlc_video_set_format` (RV32 or UYVY). RV32 is B, G, R, X in memory.
-- Starting the engine from the read-only disk image took 3.1 seconds, while it scanned its plugins.
+- Starting the engine from the read-only disk image took 3.1 seconds, while it scanned its plugins. That was mostly reading from the disk image. From a cold local disk it took 0.57 seconds without the plugin cache (see the Installer section).
 - First picture after `play`, on cold channels with a 500 ms network buffer: 0.7 to 1.7 seconds. With 1000 ms, 1.06 seconds.
 - Processor use, out of 400% for four cores: MPEG-2 SD 20%; 1080i H.264 without deinterlacing 38 to 44%, with yadif 49 to 57%, with yadif2x 78% at about 45 frames a second.
 - `--deinterlace` on the command line does nothing with memory output. `libvlc_video_set_deinterlace(player, "yadif2x")` works.
@@ -144,7 +180,7 @@ Live TV first had Channels DVR convert channels to HLS and played them with Quic
 
 ## Open questions
 
-- Whether the display sleeps during long playback. Live TV doesn't tell the system it's playing video yet. Front Row's player does this in `-[BRVideoPlayerController _suppressScreenSaver]`.
+- Whether the display-sleep assertion and the activity notification keep both display sleep and the screen saver away over a programme of 30 minutes or more. `pmset -g assertions` on the old Mac showed the assertion while a channel played, and showed it gone after leaving the channel.
 - VLC scales every source to the screen size. That suits 16:9 broadcasts, but a 4:3 source would stretch.
 - The graphics card converts colour with the standard-definition matrix (BT.601). HD broadcasts use BT.709, so colours may be slightly off.
 - Start-up artefacts that aren't green, such as grey or smeared blocks, aren't detected. None have been reported.

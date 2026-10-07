@@ -5,3 +5,4 @@ local.mk
 CLAUDE.local.md
 HANDOFF.md
 .claude/
+downloads/

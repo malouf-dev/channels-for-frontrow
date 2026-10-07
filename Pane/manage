@@ -1,0 +1,52 @@
+#!/bin/sh
+# Enables, disables or uninstalls Channels for Front Row. The pane runs it as
+# root, after an administrator's password, from inside its own bundle:
+#
+#   manage enable
+#   manage disable
+#   manage uninstall PANE
+#
+# Disabling moves the plugin out of Front Row's plugins folder, so Front Row
+# doesn't load it and its class name (RUIYTAppliance) is free for another
+# plugin. Enabling moves it back. Uninstalling removes the plugin from either
+# place, VLC's copy, the pane at PANE and the installer's record. Each one
+# quits Front Row, which keeps running in the background, so the change shows
+# the next time it opens.
+
+PLUGINS="/System/Library/CoreServices/Front Row.app/Contents/PlugIns"
+SUPPORT="/Library/Application Support/channels-for-frontrow"
+PLUGIN="ChannelsForFrontRow.frappliance"
+
+fail() {
+    echo "$1" >&2
+    exit 1
+}
+
+case "$1" in
+enable)
+    [ -d "$SUPPORT/$PLUGIN" ] || fail "The plugin isn't in $SUPPORT."
+    [ -e "$PLUGINS/$PLUGIN" ] && fail "Front Row already has the plugin."
+    mv "$SUPPORT/$PLUGIN" "$PLUGINS/" || fail "The plugin couldn't be moved back into Front Row."
+    ;;
+disable)
+    [ -d "$PLUGINS/$PLUGIN" ] || fail "Front Row doesn't have the plugin."
+    mkdir -p "$SUPPORT" || fail "$SUPPORT couldn't be made."
+    rm -rf "$SUPPORT/$PLUGIN"
+    mv "$PLUGINS/$PLUGIN" "$SUPPORT/" || fail "The plugin couldn't be moved out of Front Row."
+    ;;
+uninstall)
+    # Only ever this pane's own bundle.
+    case "$2" in
+    */ChannelsForFrontRow.prefPane) ;;
+    *) fail "That isn't the Channels for Front Row pane: $2" ;;
+    esac
+    rm -rf "$PLUGINS/$PLUGIN" "$SUPPORT" "$2" || fail "Some files couldn't be removed."
+    pkgutil --forget channels-for-frontrow.pkg >/dev/null 2>&1
+    ;;
+*)
+    fail "usage: manage enable | disable | uninstall PANE"
+    ;;
+esac
+
+killall "Front Row" 2>/dev/null
+exit 0
